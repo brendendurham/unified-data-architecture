@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  # Knowledge Graph Service
+  knowledge-graph-db:
+    image: neo4j:5.13.0
+    container_name: kg-neo4j
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/unifieddata
+      - NEO4J_dbms_memory_heap_max__size=2G
+    volumes:
+      - kg-data:/data
+      - kg-logs:/logs
+    networks:
+      - uda-network
+
+  knowledge-graph-service:
+    build:
+      context: ./services/knowledge-graph
+      dockerfile: Dockerfile
+    container_name: kg-service
+    depends_on:
+      - knowledge-graph-db
+    ports:
+      - "8000:8000"
+    environment:
+      - NEO4J_URI=bolt://knowledge-graph-db:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=unifieddata
+      - SERVICE_PORT=8000
+    networks:
+      - uda-network
+
+  # Documentation Extractor Service
+  documentation-extractor:
+    build:
+      context: ./services/documentation-extractor
+      dockerfile: Dockerfile
+    container_name: doc-extractor
+    ports:
+      - "8001:8001"
+    environment:
+      - KG_SERVICE_URL=http://knowledge-graph-service:8000
+      - SERVICE_PORT=8001
+    networks:
+      - uda-network
+
+  # Prompt Library Service
+  prompt-library:
+    build:
+      context: ./services/prompt-library
+      dockerfile: Dockerfile
+    container_name: prompt-library
+    ports:
+      - "8002:8002"
+    environment:
+      - SERVICE_PORT=8002
+    volumes:
+      - prompt-data:/app/data
+    networks:
+      - uda-network
+
+  # Prompt Optimizer Service
+  prompt-optimizer:
+    build:
+      context: ./services/prompt-optimizer
+      dockerfile: Dockerfile
+    container_name: prompt-optimizer
+    depends_on:
+      - knowledge-graph-service
+      - prompt-library
+    ports:
+      - "8003:8003"
+    environment:
+      - KG_SERVICE_URL=http://knowledge-graph-service:8000
+      - PROMPT_LIBRARY_URL=http://prompt-library:8002
+      - SERVICE_PORT=8003
+    networks:
+      - uda-network
+
+  # Project Manager Service
+  project-manager:
+    build:
+      context: ./services/project-manager
+      dockerfile: Dockerfile
+    container_name: project-manager
+    ports:
+      - "8004:8004"
+    environment:
+      - SERVICE_PORT=8004
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - uda-network
+
+  # MCP Server Registry
+  mcp-server-registry:
+    build:
+      context: ./services/mcp-server-registry
+      dockerfile: Dockerfile
+    container_name: mcp-registry
+    ports:
+      - "8005:8005"
+    environment:
+      - SERVICE_PORT=8005
+    networks:
+      - uda-network
+
+  # API Gateway
+  api-gateway:
+    image: envoyproxy/envoy:v1.28-latest
+    container_name: api-gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/envoy.yaml:/etc/envoy/envoy.yaml
+    networks:
+      - uda-network
+
+networks:
+  uda-network:
+    driver: bridge
+
+volumes:
+  kg-data:
+  kg-logs:
+  prompt-data:
