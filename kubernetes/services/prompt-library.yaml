@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prompt-library
+  labels:
+    app: prompt-library
+spec:
+  replicas: 1
+  serviceName: prompt-library
+  selector:
+    matchLabels:
+      app: prompt-library
+  template:
+    metadata:
+      labels:
+        app: prompt-library
+    spec:
+      containers:
+      - name: prompt-library
+        image: ${REPOSITORY}/prompt-library:latest
+        ports:
+        - containerPort: 8002
+        env:
+        - name: SERVICE_PORT
+          value: "8002"
+        - name: DATA_DIR
+          value: "/app/data"
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8002
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: prompt-library-data
+          mountPath: /app/data
+  volumeClaimTemplates:
+  - metadata:
+      name: prompt-library-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prompt-library
+spec:
+  selector:
+    app: prompt-library
+  ports:
+  - port: 8002
+    targetPort: 8002
+  type: ClusterIP
