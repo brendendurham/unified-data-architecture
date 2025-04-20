@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: documentation-extractor
+  labels:
+    app: documentation-extractor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: documentation-extractor
+  template:
+    metadata:
+      labels:
+        app: documentation-extractor
+    spec:
+      containers:
+      - name: documentation-extractor
+        image: ${REPOSITORY}/documentation-extractor:latest
+        ports:
+        - containerPort: 8001
+        env:
+        - name: KG_SERVICE_URL
+          value: http://knowledge-graph:8000
+        - name: SERVICE_PORT
+          value: "8001"
+        resources:
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: cache-volume
+          mountPath: /app/cache
+      volumes:
+      - name: cache-volume
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: documentation-extractor
+spec:
+  selector:
+    app: documentation-extractor
+  ports:
+  - port: 8001
+    targetPort: 8001
+  type: ClusterIP
