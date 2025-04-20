@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: knowledge-graph
+  labels:
+    app: knowledge-graph
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: knowledge-graph
+  template:
+    metadata:
+      labels:
+        app: knowledge-graph
+    spec:
+      containers:
+      - name: knowledge-graph
+        image: ${REPOSITORY}/knowledge-graph:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: NEO4J_URI
+          value: bolt://kg-db-neo4j:7687
+        - name: NEO4J_USER
+          valueFrom:
+            secretKeyRef:
+              name: kg-db-secrets
+              key: username
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: kg-db-secrets
+              key: password
+        - name: SERVICE_PORT
+          value: "8000"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: knowledge-graph
+spec:
+  selector:
+    app: knowledge-graph
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
